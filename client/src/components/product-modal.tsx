@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import PurchaseButton from "@/components/purchase-button";
 import type { Product } from "@shared/schema";
 
 interface ProductModalProps {
@@ -123,12 +124,7 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
               )}
               
               <div className="flex space-x-4">
-                <Button 
-                  className="flex-1 bg-primary text-white hover:bg-primary-dark py-3"
-                  data-testid="button-add-to-cart"
-                >
-                  Add to Cart
-                </Button>
+                <PurchaseButton product={product} />
                 <Button 
                   variant="outline"
                   size="icon"

@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import OrdersDashboard from "@/components/orders-dashboard";
 
 export default function Header() {
+  const [showOrders, setShowOrders] = useState(false);
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -39,6 +42,14 @@ export default function Header() {
           <div className="flex items-center space-x-4">
             <button 
               className="text-gray-700 hover:text-primary transition-colors duration-300"
+              onClick={() => setShowOrders(true)}
+              data-testid="button-orders-dashboard"
+            >
+              <i className="fas fa-chart-line"></i>
+              <span className="hidden sm:inline ml-2">Dashboard</span>
+            </button>
+            <button 
+              className="text-gray-700 hover:text-primary transition-colors duration-300"
               data-testid="button-history"
             >
               <i className="fas fa-history"></i>
@@ -53,6 +64,11 @@ export default function Header() {
           </div>
         </div>
       </div>
+      
+      <OrdersDashboard 
+        isOpen={showOrders} 
+        onClose={() => setShowOrders(false)} 
+      />
     </header>
   );
 }

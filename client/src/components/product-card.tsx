@@ -3,6 +3,10 @@ import type { Product } from "@shared/schema";
 
 interface ProductWithSimilarity extends Product {
   similarity?: number;
+  profit?: number;
+  supplierUrl?: string;
+  country?: string;
+  deliveryDays?: number;
 }
 
 interface ProductCardProps {
@@ -12,6 +16,8 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, onClick, showSimilarity }: ProductCardProps) {
+  const isGloballySourced = product.profit !== undefined;
+  
   const getSimilarityBadge = (similarity?: number) => {
     if (!similarity) return null;
     
@@ -28,6 +34,17 @@ export default function ProductCard({ product, onClick, showSimilarity }: Produc
     return (
       <span className={`${badgeClass} text-white px-2 py-1 rounded-full text-xs font-medium`}>
         {percentage}% Match
+      </span>
+    );
+  };
+
+  const getProfitBadge = (profit?: number) => {
+    if (!profit) return null;
+    
+    return (
+      <span className="bg-gradient-to-r from-success to-primary text-white px-2 py-1 rounded-full text-xs font-medium">
+        <i className="fas fa-coins mr-1"></i>
+        +${profit.toFixed(0)} profit
       </span>
     );
   };
@@ -59,12 +76,19 @@ export default function ProductCard({ product, onClick, showSimilarity }: Produc
           alt={product.name}
           className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
         />
-        {showSimilarity && product.similarity && (
-          <div className="absolute top-3 right-3">
-            {getSimilarityBadge(product.similarity)}
-          </div>
-        )}
+        
+        <div className="absolute top-3 right-3 space-y-2">
+          {showSimilarity && product.similarity && getSimilarityBadge(product.similarity)}
+          {isGloballySourced && getProfitBadge(product.profit)}
+        </div>
+
         <div className="absolute top-3 left-3">
+          {isGloballySourced && (
+            <span className="bg-primary text-white px-2 py-1 rounded-full text-xs font-medium mr-2">
+              <i className="fas fa-robot mr-1"></i>
+              AI Sourced
+            </span>
+          )}
           <Button 
             size="sm"
             variant="ghost"
@@ -75,6 +99,15 @@ export default function ProductCard({ product, onClick, showSimilarity }: Produc
             <i className="far fa-heart text-gray-600"></i>
           </Button>
         </div>
+
+        {isGloballySourced && product.country && (
+          <div className="absolute bottom-3 left-3">
+            <span className="bg-black/70 text-white px-2 py-1 rounded text-xs">
+              <i className="fas fa-map-marker-alt mr-1"></i>
+              {product.country}
+            </span>
+          </div>
+        )}
       </div>
       <div className="p-4">
         <h4 className="font-semibold text-gray-900 mb-1" data-testid={`text-product-name-${product.id}`}>

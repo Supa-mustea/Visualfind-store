@@ -1,4 +1,10 @@
-import { type Product, type InsertProduct, type SearchHistory, type InsertSearchHistory, type ChatMessage, type InsertChatMessage } from "@shared/schema";
+import { 
+  type Product, type InsertProduct, 
+  type SearchHistory, type InsertSearchHistory, 
+  type ChatMessage, type InsertChatMessage,
+  type DropshipOrder, type InsertDropshipOrder,
+  type Supplier, type InsertSupplier
+} from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -20,19 +26,36 @@ export interface IStorage {
   // Chat Messages
   getChatMessages(): Promise<ChatMessage[]>;
   addChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  
+  // Dropship Orders
+  getDropshipOrders(): Promise<DropshipOrder[]>;
+  getDropshipOrder(id: string): Promise<DropshipOrder | undefined>;
+  createDropshipOrder(order: InsertDropshipOrder): Promise<DropshipOrder>;
+  updateDropshipOrderStatus(id: string, status: string, trackingNumber?: string): Promise<void>;
+  
+  // Suppliers
+  getSuppliers(): Promise<Supplier[]>;
+  getActiveSuppliers(): Promise<Supplier[]>;
+  addSupplier(supplier: InsertSupplier): Promise<Supplier>;
 }
 
 export class MemStorage implements IStorage {
   private products: Map<string, Product>;
   private searchHistory: Map<string, SearchHistory>;
   private chatMessages: Map<string, ChatMessage>;
+  private dropshipOrders: Map<string, DropshipOrder>;
+  private suppliers: Map<string, Supplier>;
 
   constructor() {
     this.products = new Map();
     this.searchHistory = new Map();
     this.chatMessages = new Map();
+    this.dropshipOrders = new Map();
+    this.suppliers = new Map();
     this.initializeProducts();
     this.initializeChatHistory();
+    this.initializeDropshipOrders();
+    this.initializeSuppliers();
   }
 
   private initializeProducts() {
@@ -163,12 +186,107 @@ export class MemStorage implements IStorage {
 
   private initializeChatHistory() {
     const welcomeMessage: InsertChatMessage = {
-      content: "Hi! I'm Sarah. How can I help you find the perfect product today?",
+      content: "Hi! I'm Sarah. How can I help you find the perfect product today? I can help you source products from anywhere in the world with automatic purchasing and 10% profit margin!",
       isUser: false,
       timestamp: new Date().toISOString(),
     };
     const id = randomUUID();
     this.chatMessages.set(id, { ...welcomeMessage, id });
+  }
+
+  private initializeDropshipOrders() {
+    const sampleOrders: InsertDropshipOrder[] = [
+      {
+        productId: "1",
+        productName: "Modern L-Shaped Sectional Sofa",
+        customerEmail: "customer@example.com",
+        customerPrice: "1429.89",
+        supplierPrice: "1299.00",
+        profit: "130.89",
+        orderStatus: "processing",
+        orderDate: new Date().toISOString(),
+        trackingNumber: "TN123456789",
+        supplierUrl: "https://supplier.example.com/sofa",
+        notes: "AI-sourced from global marketplace - 10% profit margin applied",
+      },
+      {
+        productId: "2",
+        productName: "Premium Wireless Headphones",
+        customerEmail: "audiophile@example.com",
+        customerPrice: "362.99",
+        supplierPrice: "329.99",
+        profit: "32.99",
+        orderStatus: "completed",
+        orderDate: new Date(Date.now() - 86400000).toISOString(),
+        trackingNumber: "TN987654321",
+        supplierUrl: "https://supplier.example.com/headphones",
+        notes: "Fast delivery from Asia - customer very satisfied",
+      },
+      {
+        productId: "3",
+        productName: "Smart Home Security Camera",
+        customerEmail: "security@example.com",
+        customerPrice: "142.99",
+        supplierPrice: "129.99",
+        profit: "13.00",
+        orderStatus: "shipped",
+        orderDate: new Date(Date.now() - 172800000).toISOString(),
+        trackingNumber: "TN555666777",
+        supplierUrl: "https://supplier.example.com/camera",
+        notes: "European supplier - excellent quality",
+      }
+    ];
+
+    sampleOrders.forEach(order => {
+      const id = randomUUID();
+      this.dropshipOrders.set(id, { 
+        ...order, 
+        id,
+        trackingNumber: order.trackingNumber || null,
+        expectedDelivery: order.expectedDelivery || null,
+      });
+    });
+  }
+
+  private initializeSuppliers() {
+    const globalSuppliers: InsertSupplier[] = [
+      {
+        name: "AliExpress Global",
+        baseUrl: "https://api.aliexpress.com",
+        country: "China",
+        shippingCost: "15.00",
+        avgDeliveryDays: 14,
+        isActive: true,
+      },
+      {
+        name: "Amazon Global",
+        baseUrl: "https://api.amazon.com", 
+        country: "USA",
+        shippingCost: "25.00",
+        avgDeliveryDays: 7,
+        isActive: true,
+      },
+      {
+        name: "Walmart Global",
+        baseUrl: "https://api.walmart.com",
+        country: "USA", 
+        shippingCost: "20.00",
+        avgDeliveryDays: 10,
+        isActive: true,
+      }
+    ];
+
+    globalSuppliers.forEach(supplier => {
+      const id = randomUUID();
+      this.suppliers.set(id, {
+        ...supplier,
+        id,
+        apiKey: supplier.apiKey || null,
+        shippingCost: supplier.shippingCost || "0",
+        avgDeliveryDays: supplier.avgDeliveryDays || 7,
+        isActive: supplier.isActive ?? true,
+      });
+    });
   }
 
   async getProducts(filters?: {
@@ -257,6 +375,64 @@ export class MemStorage implements IStorage {
     const message: ChatMessage = { ...insertMessage, id };
     this.chatMessages.set(id, message);
     return message;
+  }
+
+  // Dropship Orders
+  async getDropshipOrders(): Promise<DropshipOrder[]> {
+    return Array.from(this.dropshipOrders.values()).sort((a, b) => 
+      new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()
+    );
+  }
+
+  async getDropshipOrder(id: string): Promise<DropshipOrder | undefined> {
+    return this.dropshipOrders.get(id);
+  }
+
+  async createDropshipOrder(insertOrder: InsertDropshipOrder): Promise<DropshipOrder> {
+    const id = randomUUID();
+    const order: DropshipOrder = {
+      ...insertOrder,
+      id,
+      orderStatus: insertOrder.orderStatus || "pending",
+      trackingNumber: insertOrder.trackingNumber || null,
+      expectedDelivery: insertOrder.expectedDelivery || null,
+    };
+    this.dropshipOrders.set(id, order);
+    return order;
+  }
+
+  async updateDropshipOrderStatus(id: string, status: string, trackingNumber?: string): Promise<void> {
+    const order = this.dropshipOrders.get(id);
+    if (order) {
+      order.orderStatus = status;
+      if (trackingNumber) {
+        order.trackingNumber = trackingNumber;
+      }
+      this.dropshipOrders.set(id, order);
+    }
+  }
+
+  // Suppliers
+  async getSuppliers(): Promise<Supplier[]> {
+    return Array.from(this.suppliers.values());
+  }
+
+  async getActiveSuppliers(): Promise<Supplier[]> {
+    return Array.from(this.suppliers.values()).filter(supplier => supplier.isActive);
+  }
+
+  async addSupplier(insertSupplier: InsertSupplier): Promise<Supplier> {
+    const id = randomUUID();
+    const supplier: Supplier = {
+      ...insertSupplier,
+      id,
+      apiKey: insertSupplier.apiKey || null,
+      shippingCost: insertSupplier.shippingCost || "0",
+      avgDeliveryDays: insertSupplier.avgDeliveryDays || 7,
+      isActive: insertSupplier.isActive ?? true,
+    };
+    this.suppliers.set(id, supplier);
+    return supplier;
   }
 }
 

@@ -33,6 +33,32 @@ export const chatMessages = pgTable("chat_messages", {
   timestamp: text("timestamp").notNull(),
 });
 
+export const dropshipOrders = pgTable("dropship_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerEmail: text("customer_email").notNull(),
+  productName: text("product_name").notNull(),
+  originalPrice: decimal("original_price", { precision: 10, scale: 2 }).notNull(),
+  sellingPrice: decimal("selling_price", { precision: 10, scale: 2 }).notNull(),
+  profit: decimal("profit", { precision: 10, scale: 2 }).notNull(),
+  supplierUrl: text("supplier_url").notNull(),
+  orderStatus: text("order_status").notNull().default("pending"),
+  customerAddress: text("customer_address").notNull(),
+  trackingNumber: text("tracking_number"),
+  orderDate: text("order_date").notNull(),
+  expectedDelivery: text("expected_delivery"),
+});
+
+export const suppliers = pgTable("suppliers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  apiKey: text("api_key"),
+  baseUrl: text("base_url").notNull(),
+  country: text("country").notNull(),
+  shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 }).default("0"),
+  avgDeliveryDays: integer("avg_delivery_days").default(7),
+  isActive: boolean("is_active").default(true),
+});
+
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
 });
@@ -45,9 +71,21 @@ export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
   id: true,
 });
 
+export const insertDropshipOrderSchema = createInsertSchema(dropshipOrders).omit({
+  id: true,
+});
+
+export const insertSupplierSchema = createInsertSchema(suppliers).omit({
+  id: true,
+});
+
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
 export type InsertSearchHistory = z.infer<typeof insertSearchHistorySchema>;
 export type SearchHistory = typeof searchHistory.$inferSelect;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertDropshipOrder = z.infer<typeof insertDropshipOrderSchema>;
+export type DropshipOrder = typeof dropshipOrders.$inferSelect;
+export type InsertSupplier = z.infer<typeof insertSupplierSchema>;
+export type Supplier = typeof suppliers.$inferSelect;

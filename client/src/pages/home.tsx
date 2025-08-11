@@ -92,11 +92,29 @@ export default function Home() {
         <div className="mb-12">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              Find Products with Visual Search
+              AI-Powered Global Product Sourcing
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Upload an image and discover similar products instantly using our AI-powered visual search technology
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-4">
+              Upload an image and discover products from anywhere in the world with automatic purchasing and 10% profit margin
             </p>
+            <div className="flex justify-center space-x-6 text-sm">
+              <div className="flex items-center">
+                <i className="fas fa-robot text-primary mr-2"></i>
+                <span>AI-Powered Sourcing</span>
+              </div>
+              <div className="flex items-center">
+                <i className="fas fa-globe text-success mr-2"></i>
+                <span>Global Suppliers</span>
+              </div>
+              <div className="flex items-center">
+                <i className="fas fa-coins text-warning mr-2"></i>
+                <span>10% Auto Profit</span>
+              </div>
+              <div className="flex items-center">
+                <i className="fas fa-shipping-fast text-primary mr-2"></i>
+                <span>Auto Purchasing</span>
+              </div>
+            </div>
           </div>
 
           <UploadZone 
