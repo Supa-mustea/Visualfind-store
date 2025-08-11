@@ -4,255 +4,205 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Product } from "@shared/schema";
 
 interface PurchaseButtonProps {
   product: Product;
+  onPurchaseSuccess?: () => void;
 }
 
-interface ProductWithExtras extends Product {
-  profit?: number;
-  supplierUrl?: string;
-  country?: string;
-  deliveryDays?: number;
+interface PaymentData {
+  email: string;
+  amount: number;
+  reference: string;
+  authorization_url: string;
 }
 
-export default function PurchaseButton({ product }: PurchaseButtonProps) {
-  const [showOrderForm, setShowOrderForm] = useState(false);
-  const [customerInfo, setCustomerInfo] = useState({
-    email: "",
-    name: "",
-    address: "",
-    city: "",
-    zipCode: "",
-    country: ""
-  });
+export default function PurchaseButton({ product, onPurchaseSuccess }: PurchaseButtonProps) {
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [email, setEmail] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const productWithExtras = product as ProductWithExtras;
-  const isGloballySourced = productWithExtras.profit !== undefined;
-  const estimatedProfit = productWithExtras.profit || (parseFloat(product.price) * 0.1);
-
-  const purchaseMutation = useMutation({
-    mutationFn: async (orderData: any) => {
-      const response = await apiRequest('POST', '/api/purchase', orderData);
-      return response.json();
+  const initializePaymentMutation = useMutation({
+    mutationFn: async (data: { email: string; productId: string }) => {
+      const response = await fetch('/api/initialize-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Payment initialization failed');
+      }
+      
+      return response.json() as Promise<PaymentData>;
     },
     onSuccess: (data) => {
+      // Redirect to Paystack payment page
+      window.open(data.authorization_url, '_blank');
+      setShowPaymentForm(false);
       toast({
-        title: "Order Placed Successfully!",
-        description: `Your order has been processed automatically. Tracking: ${data.trackingNumber}. Profit earned: $${data.profit.toFixed(2)}`,
-      });
-      setShowOrderForm(false);
-      setCustomerInfo({
-        email: "",
-        name: "",
-        address: "",
-        city: "",
-        zipCode: "",
-        country: ""
+        title: "Payment Initialized",
+        description: "Redirecting to secure payment page...",
       });
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast({
-        title: "Order Failed",
-        description: error.message || "Failed to process your order. Please try again.",
+        title: "Payment Error",
+        description: error.message,
         variant: "destructive",
       });
     },
   });
 
-  const handlePurchase = () => {
-    if (isGloballySourced) {
-      setShowOrderForm(true);
-    } else {
+  const handlePurchase = async () => {
+    if (!email) {
       toast({
-        title: "Standard Purchase",
-        description: "This is a regular product. Use the upload feature to find globally sourced items with automatic purchasing.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSubmitOrder = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!customerInfo.email || !customerInfo.address || !customerInfo.name) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields.",
+        title: "Email Required",
+        description: "Please enter your email address",
         variant: "destructive",
       });
       return;
     }
 
-    const fullAddress = `${customerInfo.address}, ${customerInfo.city}, ${customerInfo.zipCode}, ${customerInfo.country}`;
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
     
-    purchaseMutation.mutate({
-      productId: product.id,
-      customerEmail: customerInfo.email,
-      customerAddress: fullAddress,
-      productName: product.name,
-      originalPrice: productWithExtras.originalPrice || product.price,
-      sellingPrice: product.price,
-      supplierUrl: productWithExtras.supplierUrl
-    });
+    try {
+      await initializePaymentMutation.mutateAsync({
+        email,
+        productId: product.id,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
+
+  const supplierPrice = parseFloat(product.price);
+  const retailPrice = supplierPrice * 1.10; // 10% profit margin
+  const profit = retailPrice - supplierPrice;
 
   return (
     <>
       <Button 
-        className="flex-1 bg-primary text-white hover:bg-primary-dark py-3 relative"
-        onClick={handlePurchase}
-        data-testid="button-purchase-product"
+        onClick={() => setShowPaymentForm(true)}
+        className="w-full bg-success hover:bg-success/90 text-white font-semibold py-3"
+        data-testid={`button-purchase-${product.id}`}
       >
-        {isGloballySourced ? (
-          <>
-            <i className="fas fa-robot mr-2"></i>
-            AI Auto-Purchase
-          </>
-        ) : (
-          <>
-            <i className="fas fa-shopping-cart mr-2"></i>
-            Add to Cart
-          </>
-        )}
-        {isGloballySourced && (
-          <span className="absolute -top-2 -right-2 bg-success text-white text-xs px-2 py-1 rounded-full">
-            +${estimatedProfit.toFixed(0)} profit
-          </span>
-        )}
+        <i className="fas fa-shopping-cart mr-2"></i>
+        Buy Now - ₦{retailPrice.toFixed(2)}
       </Button>
 
-      <Dialog open={showOrderForm} onOpenChange={setShowOrderForm}>
+      <Dialog open={showPaymentForm} onOpenChange={setShowPaymentForm}>
         <DialogContent className="max-w-md" data-testid="modal-purchase-form">
-          <DialogTitle>Automated Global Purchase</DialogTitle>
-          
+          <DialogTitle className="flex items-center">
+            <i className="fas fa-credit-card text-success mr-2"></i>
+            Complete Your Purchase
+          </DialogTitle>
+
           <div className="space-y-4">
-            <div className="bg-gradient-to-r from-primary/10 to-success/10 p-4 rounded-lg">
-              <div className="flex items-center mb-2">
-                <i className="fas fa-robot text-primary mr-2"></i>
-                <span className="font-semibold">AI-Powered Dropshipping</span>
+            {/* Product Summary */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <img 
+                  src={product.imageUrl} 
+                  alt={product.name}
+                  className="w-16 h-16 object-cover rounded"
+                />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-900">{product.name}</h4>
+                  <p className="text-sm text-gray-600">{product.brand}</p>
+                </div>
               </div>
-              <p className="text-sm text-gray-600">
-                This product will be automatically sourced and shipped globally. 
-                Your profit: <span className="font-bold text-success">${estimatedProfit.toFixed(2)}</span>
-              </p>
-              {productWithExtras.country && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Sourced from: {productWithExtras.country} • 
-                  Delivery: {productWithExtras.deliveryDays || 7-14} days
-                </p>
-              )}
+              
+              <div className="mt-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span>Supplier Price:</span>
+                  <span>₦{supplierPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-success font-semibold">
+                  <span>Your Price (10% markup):</span>
+                  <span>₦{retailPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Platform Profit:</span>
+                  <span>₦{profit.toFixed(2)}</span>
+                </div>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmitOrder} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="name">Customer Name *</Label>
-                  <Input
-                    id="name"
-                    value={customerInfo.name}
-                    onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
-                    placeholder="Full name"
-                    required
-                    data-testid="input-customer-name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={customerInfo.email}
-                    onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-                    placeholder="customer@email.com"
-                    required
-                    data-testid="input-customer-email"
-                  />
-                </div>
-              </div>
-
+            {/* Payment Form */}
+            <div className="space-y-3">
               <div>
-                <Label htmlFor="address">Street Address *</Label>
+                <Label htmlFor="email">Email Address</Label>
                 <Input
-                  id="address"
-                  value={customerInfo.address}
-                  onChange={(e) => setCustomerInfo({...customerInfo, address: e.target.value})}
-                  placeholder="123 Main Street"
-                  required
-                  data-testid="input-customer-address"
+                  id="email"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  data-testid="input-email"
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="city">City *</Label>
-                  <Input
-                    id="city"
-                    value={customerInfo.city}
-                    onChange={(e) => setCustomerInfo({...customerInfo, city: e.target.value})}
-                    placeholder="City"
-                    required
-                    data-testid="input-customer-city"
-                  />
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-center text-blue-800 text-sm">
+                  <i className="fas fa-info-circle mr-2"></i>
+                  <span>Secure payment powered by Paystack</span>
                 </div>
-                <div>
-                  <Label htmlFor="zipCode">ZIP Code *</Label>
-                  <Input
-                    id="zipCode"
-                    value={customerInfo.zipCode}
-                    onChange={(e) => setCustomerInfo({...customerInfo, zipCode: e.target.value})}
-                    placeholder="12345"
-                    required
-                    data-testid="input-customer-zip"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="country">Country *</Label>
-                  <Input
-                    id="country"
-                    value={customerInfo.country}
-                    onChange={(e) => setCustomerInfo({...customerInfo, country: e.target.value})}
-                    placeholder="USA"
-                    required
-                    data-testid="input-customer-country"
-                  />
-                </div>
+                <ul className="mt-2 text-xs text-blue-700 space-y-1">
+                  <li>• AI-powered global sourcing</li>
+                  <li>• Automatic supplier purchasing</li>
+                  <li>• Order tracking included</li>
+                  <li>• 10% profit margin applied</li>
+                </ul>
               </div>
 
-              <div className="flex space-x-3 pt-4">
+              <div className="flex space-x-3">
                 <Button
-                  type="button"
                   variant="outline"
-                  onClick={() => setShowOrderForm(false)}
+                  onClick={() => setShowPaymentForm(false)}
                   className="flex-1"
                   data-testid="button-cancel-purchase"
                 >
                   Cancel
                 </Button>
                 <Button
-                  type="submit"
-                  className="flex-1 bg-success text-white hover:bg-success/90"
-                  disabled={purchaseMutation.isPending}
+                  onClick={handlePurchase}
+                  disabled={isProcessing || !email}
+                  className="flex-1 bg-success hover:bg-success/90"
                   data-testid="button-confirm-purchase"
                 >
-                  {purchaseMutation.isPending ? (
+                  {isProcessing ? (
                     <>
-                      <i className="fas fa-spinner fa-spin mr-2"></i>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
                       Processing...
                     </>
                   ) : (
                     <>
-                      <i className="fas fa-check mr-2"></i>
-                      Confirm Purchase
+                      <i className="fas fa-lock mr-2"></i>
+                      Pay ₦{retailPrice.toFixed(2)}
                     </>
                   )}
                 </Button>
               </div>
-            </form>
+            </div>
+
+            <div className="text-xs text-gray-500 text-center">
+              By proceeding, you agree to automated dropshipping and order fulfillment
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -2,6 +2,8 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { aiSourcingService } from "./ai-sourcing";
+import { paystackService } from "./paystack-service";
+import { aiService } from "./ai-service";
 import multer from "multer";
 import path from "path";
 import { insertChatMessageSchema, insertDropshipOrderSchema } from "@shared/schema";
@@ -271,6 +273,208 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to source products" });
+    }
+  });
+
+  // Initialize Paystack payment
+  app.post("/api/initialize-payment", async (req, res) => {
+    try {
+      const { email, productId } = req.body;
+      
+      if (!email || !productId) {
+        return res.status(400).json({ message: "Email and product ID are required" });
+      }
+
+      // Get product details
+      const product = await storage.getProduct(productId);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+
+      const supplierPrice = parseFloat(product.price);
+      const retailPrice = supplierPrice * 1.10; // 10% profit margin
+      const profit = retailPrice - supplierPrice;
+
+      // Initialize payment with Paystack
+      const paymentData = await paystackService.initializePayment({
+        email,
+        amount: retailPrice,
+        metadata: {
+          orderId: `order_${Date.now()}`,
+          productId,
+          productName: product.name,
+          supplierPrice: supplierPrice.toFixed(2),
+          profit: profit.toFixed(2),
+        },
+        callback_url: `${req.protocol}://${req.get('host')}/api/payment-callback`,
+      });
+
+      res.json({
+        success: true,
+        authorization_url: paymentData.data.authorization_url,
+        reference: paymentData.data.reference,
+        amount: retailPrice,
+      });
+    } catch (error) {
+      console.error('Payment initialization error:', error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to initialize payment: " + (error as Error).message 
+      });
+    }
+  });
+
+  // Verify Paystack payment
+  app.post("/api/verify-payment", async (req, res) => {
+    try {
+      const { reference } = req.body;
+      
+      if (!reference) {
+        return res.status(400).json({ message: "Payment reference is required" });
+      }
+
+      // Verify payment with Paystack
+      const verification = await paystackService.verifyPayment(reference);
+      
+      if (verification.data.status === 'success') {
+        const metadata = (verification.data as any).metadata;
+        
+        // Create dropship order
+        const order = await storage.createDropshipOrder({
+          productId: metadata.productId,
+          productName: metadata.productName,
+          customerEmail: verification.data.customer.email,
+          customerPrice: paystackService.koboToNaira(verification.data.amount).toFixed(2),
+          supplierPrice: metadata.supplierPrice,
+          profit: metadata.profit,
+          orderStatus: "processing",
+          orderDate: new Date().toISOString(),
+          supplierUrl: `https://supplier.example.com/product/${metadata.productId}`,
+          notes: "Payment processed via Paystack - AI dropshipping order",
+        });
+
+        res.json({
+          success: true,
+          verified: true,
+          order: order,
+          message: "Payment successful! Your order has been created and will be automatically processed.",
+        });
+      } else {
+        res.json({
+          success: false,
+          verified: false,
+          message: "Payment verification failed",
+        });
+      }
+    } catch (error) {
+      console.error('Payment verification error:', error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to verify payment: " + (error as Error).message 
+      });
+    }
+  });
+
+  // Payment callback webhook (for automatic verification)
+  app.post("/api/payment-callback", async (req, res) => {
+    try {
+      const { reference } = req.body;
+      
+      if (reference) {
+        // Automatically verify and process the payment
+        const verification = await paystackService.verifyPayment(reference);
+        
+        if (verification.data.status === 'success') {
+          const metadata = (verification.data as any).metadata;
+          
+          // Process automatic order fulfillment
+          try {
+            const orderResult = await aiSourcingService.processAutomaticOrder(metadata.productId, {
+              email: verification.data.customer.email,
+              address: "Address will be collected separately", // In real app, collect during checkout
+              productName: metadata.productName,
+              orderId: metadata.orderId
+            });
+
+            console.log('Automatic order processed:', orderResult);
+          } catch (orderError) {
+            console.error('Automatic order processing failed:', orderError);
+          }
+        }
+      }
+      
+      res.status(200).send('OK');
+    } catch (error) {
+      console.error('Payment callback error:', error);
+      res.status(500).send('Error');
+    }
+  });
+
+  // Get Paystack transaction history
+  app.get("/api/transactions", async (req, res) => {
+    try {
+      const { page = 1, perPage = 50, status, from, to } = req.query;
+      
+      const transactions = await paystackService.exportTransactions({
+        page: parseInt(page as string),
+        perPage: parseInt(perPage as string),
+        status: status as any,
+        from: from as string,
+        to: to as string,
+      });
+
+      res.json(transactions);
+    } catch (error) {
+      console.error('Transaction fetch error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch transactions: " + (error as Error).message 
+      });
+    }
+  });
+
+  // AI-powered visual search with dual AI providers
+  app.post("/api/visual-search", upload.single('image'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Image file is required" });
+      }
+
+      // Convert image to base64
+      const fs = await import('fs');
+      const imageBuffer = fs.readFileSync(req.file.path);
+      const base64Image = imageBuffer.toString('base64');
+
+      // Use AI service with fallback support
+      const useOpenAI = req.body.useOpenAI === 'true';
+      const sourcingResult = await aiService.analyzeImageAndSourceProducts(base64Image, useOpenAI);
+
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      res.json({
+        success: true,
+        searchQuery: sourcingResult.searchQuery,
+        confidence: sourcingResult.confidence,
+        products: sourcingResult.products,
+        totalFound: sourcingResult.products.length,
+        aiProvider: useOpenAI ? 'OpenAI' : 'Anthropic',
+      });
+    } catch (error) {
+      console.error('Visual search error:', error);
+      // Clean up file if it exists
+      if (req.file) {
+        try {
+          const fs = await import('fs');
+          fs.unlinkSync(req.file.path);
+        } catch (cleanupError) {
+          console.error('File cleanup error:', cleanupError);
+        }
+      }
+      
+      res.status(500).json({ 
+        success: false,
+        message: "Visual search failed: " + (error as Error).message 
+      });
     }
   });
 

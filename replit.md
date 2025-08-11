@@ -55,6 +55,23 @@ Preferred communication style: Simple, everyday language.
 - **Path Aliases**: Simplified imports with @ prefixes for components and utilities
 - **Replit Integration**: Custom plugins for development environment optimization
 
+## Recent Changes (January 2025)
+
+### AI Integration Enhancement
+- **Dual AI Provider Support**: Integrated both Anthropic Claude 4.0 Sonnet and OpenAI GPT-4o for product sourcing with automatic fallback
+- **Enhanced Visual Search**: Advanced image analysis capabilities with multiple AI providers for reliability
+- **Product Categorization**: Expanded to include Mobile Phones, Laptops, Electronics, Clothing, and Accessories
+
+### Payment Gateway Integration
+- **Paystack Integration**: Complete payment processing system with Nigerian Naira support
+- **Automated Order Processing**: Payment verification triggers automatic dropshipping workflow
+- **Transaction Management**: Real-time payment tracking and order status updates
+
+### Product Catalog Expansion
+- **New Categories**: Added 10+ products across mobile phones, laptops, electronics, clothing, and accessories
+- **Enhanced Product Data**: Detailed specifications, multiple images, and comprehensive descriptions
+- **AI-Powered Profit Margins**: Automatic 10% markup calculation on all globally sourced products
+
 ## External Dependencies
 
 ### Core Framework Dependencies
@@ -63,6 +80,14 @@ Preferred communication style: Simple, everyday language.
 - **@tanstack/react-query**: Server state management and caching
 - **express**: Web server framework
 - **multer**: File upload handling middleware
+
+### AI Services
+- **@anthropic-ai/sdk**: Claude 4.0 Sonnet for primary AI processing
+- **openai**: GPT-4o for fallback AI processing and visual analysis
+
+### Payment Processing
+- **Paystack API**: Nigerian payment gateway for secure transactions
+- **Webhook Support**: Automatic payment verification and order processing
 
 ### UI Component Libraries
 - **@radix-ui/***: Comprehensive set of accessible UI primitives

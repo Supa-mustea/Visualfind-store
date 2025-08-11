@@ -35,17 +35,18 @@ export const chatMessages = pgTable("chat_messages", {
 
 export const dropshipOrders = pgTable("dropship_orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: text("product_id").notNull(),
   customerEmail: text("customer_email").notNull(),
   productName: text("product_name").notNull(),
-  originalPrice: decimal("original_price", { precision: 10, scale: 2 }).notNull(),
-  sellingPrice: decimal("selling_price", { precision: 10, scale: 2 }).notNull(),
+  customerPrice: decimal("customer_price", { precision: 10, scale: 2 }).notNull(),
+  supplierPrice: decimal("supplier_price", { precision: 10, scale: 2 }).notNull(),
   profit: decimal("profit", { precision: 10, scale: 2 }).notNull(),
   supplierUrl: text("supplier_url").notNull(),
   orderStatus: text("order_status").notNull().default("pending"),
-  customerAddress: text("customer_address").notNull(),
   trackingNumber: text("tracking_number"),
   orderDate: text("order_date").notNull(),
   expectedDelivery: text("expected_delivery"),
+  notes: text("notes"),
 });
 
 export const suppliers = pgTable("suppliers", {
